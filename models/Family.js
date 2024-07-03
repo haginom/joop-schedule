@@ -1,27 +1,6 @@
 const mongoose = require("mongoose");
 const { Schema } = mongoose;
 
-const AllowedEmailSchema = new mongoose.Schema({
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-    validate: {
-      validator: function (emails) {
-        // Check for uniqueness
-        const uniqueEmails = Array.from(new Set(emails));
-        return uniqueEmails.length === emails.length;
-      },
-      message: "Allowed emails must be unique.",
-    },
-  },
-  role: {
-    type: String,
-    enum: ["admin", "user"],
-    required: true,
-  },
-});
-
 const FamilySchema = new Schema({
   childName: {
     type: String,
@@ -44,8 +23,12 @@ const FamilySchema = new Schema({
     required: [true, "Please provide a start date"],
   },
 
-  allowedEmails: [AllowedEmailSchema],
-
+  allowedEmails: [
+    {
+      type: Schema.Types.ObjectId,
+      ref: "AllowedEmail",
+    },
+  ],
   parents: [
     {
       type: Schema.Types.ObjectId,
@@ -56,6 +39,9 @@ const FamilySchema = new Schema({
 
 FamilySchema.pre("save", async function (next) {
   try {
+    if (!this.$isNew) {
+      return next();
+    }
     const family = this;
     const existingFamily = await mongoose.model("Family").findOne({
       childDoB: family.childDoB,
@@ -74,23 +60,33 @@ FamilySchema.pre("save", async function (next) {
   }
 });
 
-FamilySchema.pre("findOneAndUpdate", function (next) {
-  if (this._update.allowedEmails && this._update.allowedEmails.length > 2) {
-    const error = new Error("Only two emails are allowed");
-    return next(error);
-  }
-  //check that the emails are unique
-  if (this._update.allowedEmails && this._update.allowedEmails.length === 2) {
-    const uniqueEmails = new Set(
-      this._update.allowedEmails.map((email) => email.email)
-    );
-    if (uniqueEmails.size !== 2) {
-      const error = new Error("Allowed emails must be unique");
+FamilySchema.pre("findOneAndUpdate", async function (next) {
+  try {
+    //check if the email already exists
+    const emailToAdd = this.getUpdate().$addToSet.allowedEmails.$each;
+    //if email already exists, return an error
+
+    const existingEmail = await this.model.findOne({
+      _id: this.getQuery()._id,
+      allowedEmails: { $in: emailToAdd },
+    });
+
+    if (existingEmail) {
+      const error = new Error("Email already exists");
       return next(error);
     }
-  }
 
-  next();
+    //if more than 2 emails, return an error
+    const family = await this.model.findOne({ _id: this.getQuery()._id });
+    if (family.allowedEmails.length >= 2) {
+      const error = new Error("Only two emails are allowed");
+      return next(error);
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
 });
 
 const Family = mongoose.model("Family", FamilySchema);

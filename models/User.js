@@ -74,6 +74,18 @@ const UserSchema = new Schema(
       ],
       unique: true,
     },
+    confirmationKey: {
+      type: String,
+      minLength: 64,
+      maxLength: 64,
+    },
+    confirmationExpiry: {
+      type: Date,
+    },
+    confirmed: {
+      type: Boolean,
+      default: false,
+    },
     password: {
       type: String,
       required: [true, "Please provide a password"],
@@ -97,6 +109,7 @@ const UserSchema = new Schema(
 UserSchema.pre("save", async function () {
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
+  this.confirmationKey = await bcrypt.hash(this.confirmationKey, salt);
 });
 
 UserSchema.methods.createJWT = function () {
@@ -107,6 +120,12 @@ UserSchema.methods.createJWT = function () {
       expiresIn: process.env.JWT_LIFETIME,
     }
   );
+};
+
+UserSchema.methods.createConfirmationJWT = function () {
+  return jwt.sign({ userId: this._id }, process.env.EMAIL_SECRET, {
+    expiresIn: process.env.JWT_LIFETIME,
+  });
 };
 
 UserSchema.methods.matchPasswords = async function (candidatePassword) {

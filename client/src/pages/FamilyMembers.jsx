@@ -6,22 +6,34 @@ import { useFamilyContext } from "./FamilyLayout";
 import Wrapper from "../assets/wrappers/FamiyMembers";
 import { MdDelete } from "react-icons/md";
 
-export const action = async ({ params, body }) => {
+export const action = async ({ request, params }) => {
+  const formData = await request.formData();
+  const emailToAdd = Object.fromEntries(formData);
+  const dataToSend = { emailToAdd: [emailToAdd] };
   try {
     const data = await customFetch.post(
       `/family/families/${params.id}/members`,
-      body
+      dataToSend
     );
     toast.success("Invites sent successfully");
+    window.location.reload();
     return data.data;
   } catch (error) {
-    toast.error({ error });
-    console.log(error);
+    toast.error(error?.response?.data?.message);
+    return error;
   }
 };
 
-const handleClick = (e) => {
-  console.log("hello");
+const handleDelete = (familyId, memberId) => {
+  console.log(familyId, memberId);
+  try {
+    customFetch.delete(`/family/families/${familyId}/members/${memberId}`);
+    toast.success("Member deleted successfully");
+    window.location.reload();
+  } catch (error) {
+    toast.error(error?.response?.data?.message);
+    return error;
+  }
 };
 
 const FamilyMembers = () => {
@@ -55,25 +67,32 @@ const FamilyMembers = () => {
 
             <div className="invited-section">
               <h4>Members</h4>
-              {family?.parents.map((parent) => (
+              {family?.parents?.map((parent) => (
                 <div key={parent._id} className="row invited">
                   <div className="avatar"></div>
                   <div>{parent.email}</div>
 
                   <div className="tag accepted">Invite accepted</div>
-                  <button className="delete-invite">
+                  <button
+                    type="button"
+                    className="delete-invite"
+                    onClick={() => handleDelete(family._id, parent._id)}
+                  >
                     <MdDelete />
                   </button>
                 </div>
               ))}
-
               {family?.allowedEmails.map((parent) => (
                 <div key={parent._id} className="row invited">
                   <div className="avatar"></div>
                   <div>{parent.email}</div>
 
                   <div className="tag pending">Invite sent</div>
-                  <button className="delete-invite">
+                  <button
+                    type="button"
+                    className="delete-invite"
+                    onClick={() => handleDelete(family._id, parent._id)}
+                  >
                     <MdDelete />
                   </button>
                 </div>
